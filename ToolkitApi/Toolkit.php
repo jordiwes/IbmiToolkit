@@ -160,51 +160,19 @@ class Toolkit
             $this->debugLog("Creating new conn with database: '$databaseNameOrResource', user or i5 naming flag: '$userOrI5NamingFlag', transport: '$transportType', persistence: '$isPersistent'\n");
         }
 
+        $conn = $transportObject->getConnection();
+        $this->setTransport($transport);
+        $this->chooseTransport($transportType);
+
         // do we have a DB resource "by user" or do we create one
-        if ($transportType === 'ibm_db2' && is_resource($databaseNameOrResource)) {
-            $conn = $databaseNameOrResource;
-            $this->_i5NamingFlag = $userOrI5NamingFlag;
+        if ($transportType === 'ibm_db2') { // && is_resource($databaseNameOrResource)) {
+            $this->_i5NamingFlag = $transportObject->getI5NamingMode();
             $schemaSep = ($this->_i5NamingFlag) ? '/' : '.';
             $this->setOptions(array('schemaSep' => $schemaSep));
-            $this->chooseTransport('ibm_db2');
             if ($this->isDebug()) {
                 $this->debugLog("Re-using existing db connection with schema separator: $schemaSep");
             }
-        } elseif ($transportType === 'http' || $transportType === 'https') {
-            $databaseName = $databaseNameOrResource;
-            $user = $userOrI5NamingFlag;
-            $this->chooseTransport($transportType);
-            $transport = $this->getTransport();
-            $conn = $transport->connect($databaseName, $user, $password, array('persistent'=>$this->getIsPersistent()));
-        } else {
-            $databaseName = $databaseNameOrResource;
-            $user = $userOrI5NamingFlag;
-
-            if ($this->isDebug()) {
-                $this->debugLog("Creating a new db connection at " . date("Y-m-d H:i:s") . ".\n");
-                $this->execStartTime = microtime(true);
-            }
-
-            $this->setIsPersistent($isPersistent);
-            $this->chooseTransport($transportType);
-            $transport = $this->getTransport();
-            $conn = $transport->connect($databaseName, $user, $password, array('persistent'=>$this->getIsPersistent()));
-
-            if ($this->isDebug()) {
-                $durationCreate = sprintf('%f', microtime(true) - $this->execStartTime);
-                $this->debugLog("Created a new db connection in $durationCreate seconds.");
-            }
-
-            if (!$conn) {
-                // Note: SQLState 08001 (with or without SQLCODE=-30082) usually means invalid user or password. This is true for DB2 and ODBC.
-                $sqlState = $transport->getErrorCode();
-                $this->error = $transport->getErrorMsg();
-
-                $this->debugLog("\nFailed to connect. sqlState: $sqlState. error: $this->error");
-                throw new \Exception($this->error, (int)$sqlState);
-            }
-        }
-
+        } 
         $this->conn = $conn;
 
         return $this;
@@ -334,26 +302,22 @@ class Toolkit
         switch($transportName)
         {
             case 'http':
-                $transport = new httpsupp();
-                $transport->setUrl(
+                $this->transport->setUrl(
                     $this->getOption('httpTransportUrl')
                 );
-                $this->setTransport($transport);
                 break;
             case 'https':
-                $transport = new httpsupp();
 
                 // Set SSL certificate authority file
                 $sslCaFile = $this->getConfigValue('transport', 'sslCaFile');
-                $transport->setSSLCAFile($sslCaFile);
+                $this->transport->setSSLCAFile($sslCaFile);
 
                 // Set server name
                 $serverName = $this->getConfigValue('transport', 'serverName');
-                $transport->setServerName($serverName);
-                $transport->setUrl(
+                $this->transport->setServerName($serverName);
+                $this->transport->setUrl(
                     $this->getOption('httpTransportUrl')
                 );
-                $this->setTransport($transport);
                 break;
             default:
                 $this->setDb($transportName);
@@ -381,17 +345,13 @@ class Toolkit
 
         if ($extensionName === 'ibm_db2') {
                 $this->setOptions(array('plugPrefix' => 'iPLUG'));
-                $this->db = new db2supp();
 
                 $this->setDb2(); // not used in toolkit anymore but keep for backwards compat.
         } elseif ($extensionName === 'odbc') {
                 //for odbc will be different default stored procedure call
                 $this->setOptions(array('plugPrefix' => 'iPLUGR')); // "R" = "result set" which is how ODBC driver returns param results
-                $this->db = new odbcsupp();
-        }
+                }
 
-        // transport, too, to be generic
-        $this->setTransport($this->db);
 
         return;
     }
@@ -525,8 +485,8 @@ class Toolkit
         }
 
         // if transport is a db, end the db connection.
-        if (isset($this->db) && $this->db) {
-            $this->db->disconnect($this->conn);
+        if (isset($this->transport) && $this->transport) {
+            $this->transport->disconnect($this->conn);
         }
 
         $this->conn = null;
@@ -539,8 +499,8 @@ class Toolkit
     {
         $this->PgmCall("OFF", NULL);
 
-        if (isset($this->db) && $this->db) {
-            $this->db->disconnectPersistent($this->conn);
+        if (isset($this->transport) && $this->transport) {
+            $this->transport->disconnectPersistent($this->conn);
         }
         $this->conn = null;
     }
@@ -776,7 +736,7 @@ class Toolkit
         // @todo have one transport class that includes db as well.
 
         // If a database transport
-        if (isset($this->db) && $this->db) {
+        if (isset($this->transport) && $this->transport) {
             $result = $this->makeDbCall($internalKey, $plugSize, $controlKeyString, $inputXml, $disconnect);
         } else {
             // Not a DB transport. At this time, assume HTTP transport (which doesn't use a plug, by the way. uses outbytesize)
@@ -853,15 +813,15 @@ class Toolkit
         }
 
         // can return false if prepare or exec failed.
-        $outputXml = $this->db->execXMLStoredProcedure($this->conn, $sql, $bindArray);
+        $outputXml = $this->transport->execXMLStoredProcedure($this->conn, $sql, $bindArray);
         if (!$outputXml) {
             // if false returned, was a database error (stored proc prepare or execute error)
             // @todo add ODBC SQL State codes
 
             // If can't find stored proc for ODBC: Database code (if any): S1000. Message: [unixODBC][IBM][System i Access ODBC Driver][DB2 for i5/OS]SQL0440 - Routine IPLUG512K in XMLSERVICE not found with specified parameters.
             //Warning: odbc_prepare(): SQL error: [unixODBC][IBM][System i Access ODBC Driver][DB2 for i5/OS]SQL0440 - Routine IPLUG512K in XMLSERVICE not found with specified parameters., SQL state S1000 in SQLPrepare in /usr/local/zend/ToolkitAPI/Odbcsupp.php on line 89
-            $this->cpfErr = $this->db->getErrorCode();
-            $this->setErrorMsg($this->db->getErrorMsg());
+            $this->cpfErr = $this->transport->getErrorCode();
+            $this->setErrorMsg($this->transport->getErrorMsg());
 
             $errorReason = $this->getErrorReason($plugSize);
 
@@ -870,7 +830,7 @@ class Toolkit
         }
 
         if ($disconnect) {
-            $this->db->disconnect($this->conn);
+            $this->transport->disconnect($this->conn);
 
             if ($this->isDebug()) {
                 $this->debugLog("Db disconnect requested and done.\n");
@@ -2038,11 +1998,11 @@ class Toolkit
      */
     public function executeQuery($stmt)
     {
-        $Txt = $this->db->executeQuery($this->getConnection(), $stmt);
+        $Txt = $this->transport->executeQuery($this->getConnection(), $stmt);
 
         if (!is_array($Txt)) {
-            $this->cpfErr = $this->db->getErrorCode();
-            $this->error = $this->db->getErrorMsg();
+            $this->cpfErr = $this->transport->getErrorCode();
+            $this->error = $this->transport->getErrorMsg();
 
             throw new \Exception($this->error, (int)$this->cpfErr);
         }

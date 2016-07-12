@@ -23,8 +23,18 @@ class ToolkitService
      */
     static function getInstance($databaseNameOrResource = '*LOCAL', $userOrI5NamingFlag = '', $password = '', $transportType = '', $isPersistent = false)
     {
+        if (is_resource($databaseNameOrResource))
+        {
+            $i5NamingFlag = $userOrI5NamingFlag;
+            $user = '';
+        }
+        else
+        {
+            $user = $userOrI5NamingFlag;
+            $i5NamingFlag = '0';
+        }
         //default is db2 transport
-        return new Toolkit(new Db2Transport($databaseNameOrResource, $userOrI5NamingFlag, $password, $isPersistent));
+        return new Toolkit(new Db2Transport($databaseNameOrResource, $i5NamingFlag, $user, $password, $isPersistent));
     }
 
 }

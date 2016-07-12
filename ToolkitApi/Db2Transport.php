@@ -15,14 +15,17 @@ class Db2Transport implements TransportInterface
     private $last_errorcode;
     private $last_errormsg;
     private $isPersistent;
+    private $i5NamingFlag;
     private $conn;
     public static $transportType = 'ibm_db2';
 
 
-    public function __construct($databaseNameOrResource, $userOrI5NamingFlag = '0', $password = '', $isPersistent = false)
+
+    public function __construct($databaseNameOrResource, $i5NamingFlag = '0', $user = '', $password = '', $isPersistent = false)
     {
         if (is_resource($databaseNameOrResource)) {
             $this->conn = $databaseNameOrResource;
+            $this->i5NamingFlag = $userOrI5NamingFlag;
 
         } else {
             $databaseName = $databaseNameOrResource;
@@ -54,6 +57,11 @@ class Db2Transport implements TransportInterface
     public function getConnection()
     {
         return $this->conn;
+    }
+
+    public function getI5NamingFlag()
+    {
+        return $this->i5NamingFlag;
     }
     
 
