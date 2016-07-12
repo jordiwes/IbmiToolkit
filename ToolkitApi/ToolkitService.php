@@ -2,6 +2,7 @@
 require_once 'autoload.php';
 
 use ToolkitApi\Toolkit;
+use ToolkitApi\Db2Transport;
 /**
  * Class ToolkitService
  *
@@ -22,7 +23,8 @@ class ToolkitService
      */
     static function getInstance($databaseNameOrResource = '*LOCAL', $userOrI5NamingFlag = '', $password = '', $transportType = '', $isPersistent = false)
     {
-        return new Toolkit($databaseNameOrResource, $userOrI5NamingFlag, $password, $transportType, $isPersistent);
+        //default is db2 transport
+        return new Toolkit(new Db2Transport($databaseNameOrResource, $userOrI5NamingFlag, $password, $isPersistent));
     }
 
 }

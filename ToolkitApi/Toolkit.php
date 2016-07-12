@@ -132,7 +132,7 @@ class Toolkit
      * @param bool $isPersistent
      * @throws \Exception
      */
-    public function __construct($databaseNameOrResource, $userOrI5NamingFlag = '0', $password = '', $transportType = '', $isPersistent = false)
+    public function __construct(TransportInterface $transportObject)//$databaseNameOrResource, $userOrI5NamingFlag = '0', $password = '', $transportType = '', $isPersistent = false)
     {
         $this->execStartTime = '';
 
@@ -148,11 +148,8 @@ class Toolkit
         $this->getOptionalParams('transport', array('httpTransportUrl', 'plugSize'));
 
         // populate serviceParams with $transport, or get it from INI
-        if (!$transportType) {
-            $this->getOptionalParams('transport', array('transportType'));
-        } else {
-            $this->serviceParams['transportType'] = $transportType;
-        }
+        $this->serviceParams['transportType'] = $transportObject->transportType;
+    
 
         // set up options in this object. Includes debugging, logging, transport.
         $this->setOptions($this->serviceParams);

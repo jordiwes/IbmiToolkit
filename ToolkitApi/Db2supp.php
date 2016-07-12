@@ -1,6 +1,8 @@
 <?php
 namespace ToolkitApi;
 
+use ToolkitApi\TransportInterface;
+
 /**
  * Class db2supp
  * 
@@ -8,10 +10,45 @@ namespace ToolkitApi;
  *
  * @package ToolkitApi
  */
-class db2supp
+class Db2Transport implements TransportInterface
 {
     private $last_errorcode;
     private $last_errormsg;
+    private $isPersistent;
+    public static $transportType = 'ibm_db2';
+
+
+    public function __construct($databaseNameOrResource, $i5NamingFlag = '0', $user = '', $password = '', $isPersistent = false)
+    {
+        if (is_resource($databaseNameOrResource)) {
+            $conn = $databaseNameOrResource;
+            
+        } else {
+            $databaseName = $databaseNameOrResource;
+            
+            if ($this->isDebug()) {
+                $this->debugLog("Creating a new db connection at " . date("Y-m-d H:i:s") . ".\n");
+                $this->execStartTime = microtime(true);
+            }
+
+            $conn = $this->connect($databaseName, $user, $password, array('persistent'=>$this->getIsPersistent()));
+
+            if ($this->isDebug()) {
+                $durationCreate = sprintf('%f', microtime(true) - $this->execStartTime);
+                $this->debugLog("Created a new db connection in $durationCreate seconds.");
+            }
+
+            if (!$conn) {
+                // Note: SQLState 08001 (with or without SQLCODE=-30082) usually means invalid user or password. This is true for DB2 and ODBC.
+                $sqlState = $transport->getErrorCode();
+                $this->error = $transport->getErrorMsg();
+
+                $this->debugLog("\nFailed to connect. sqlState: $sqlState. error: $this->error");
+                throw new \Exception($this->error, (int)$sqlState);
+            }
+        }
+        return $conn;
+    }
 
     /**
      * 

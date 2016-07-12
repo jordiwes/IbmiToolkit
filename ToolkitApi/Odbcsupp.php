@@ -1,12 +1,14 @@
 <?php
 namespace ToolkitApi;
 
+use ToolkitApi\TransportInterface;
+
 /**
  * Class odbcsupp
  *
  * @package ToolkitApi
  */
-class odbcsupp
+class odbcsupp implements TransportInterface
 {
     private $last_errorcode;
     private $last_errormsg;
@@ -177,4 +179,6 @@ class odbcsupp
         
         return $txt;
     }
+
+    
 }
