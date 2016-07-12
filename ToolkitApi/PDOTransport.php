@@ -4,7 +4,7 @@ namespace ToolkitApi;
 use ToolkitApi\TransportInterface;
 
 /**
- * Class odbcsupp
+ * Class PDOTransport
  *
  * @package ToolkitApi
  */
@@ -157,42 +157,43 @@ class PDOTransport implements TransportInterface
      */
     public function execXMLStoredProcedure($conn, $stmt, $bindArray)
     {
-        $crsr = odbc_prepare($conn, $stmt);
+        $crsr = $conn->prepare($conn, $stmt);
         
         if (!$crsr) { 
             $this->setError($conn);
             return false;
         }
-        
-        // extension problem: sends warning message into the php_log or stdout 
+
+
+
+
+        // stored procedure takes four parameters. Each 'name' will be bound to a real PHP variable
+        $params = array(
+            array('position' => 1, 'name' => "internalKey", 'inout' => PDO::PARAM_INPUT),
+            array('position' => 2, 'name' => "controlKey",  'inout' => PDO::PARAM_INPUT),
+            array('position' => 3, 'name' => "inputXml",    'inout' => PDO::PARAM_INPUT),
+            array('position' => 4, 'name' => "outputXml",   'inout' => PDO::PARAM_OUPUT),
+        );
+
+        // bind the four parameters
+        foreach ($params as $param) {
+            $ret = $crsr->bindParam ($param['position'], $$param['name'], $param['inout']);
+            if (!$ret) {
+                // unable to bind a param. Set error and exit
+                $this->setStmtError($crsr);
+                return false;
+            }
+        }
+
+        // extension problem: sends warning message into the php_log or stdout
         // about number of result sets. (switch on return code of SQLExecute() 
         // SQL_SUCCESS_WITH_INFO
-        if (!@odbc_execute($crsr , array($bindArray['internalKey'], $bindArray['controlKey'], $bindArray['inputXml']))) {
+        if (!@$crsr->execute()) {
             $this->setError($conn);
-            return "ODBC error code: " . $this->getErrorCode() . ' msg: ' . $this->getErrorMsg();
+            return "PDO Error code: " . $this->getErrorCode() . ' msg: ' . $this->getErrorMsg();
         }
         
-        // disconnect operation cause crush in fetch, nothing appears as sql script.
-        $row='';
-        $outputXML = '';
-        if (!$bindArray['disconnect']) {
-            while (odbc_fetch_row($crsr)) {
-                $tmp = odbc_result($crsr, 1);
-                
-                if ($tmp) {
-                    // because of ODBC problem blob transferring should execute some "clean" on returned data
-                    if (strstr($tmp , "</script>")) {
-                        $pos = strpos($tmp, "</script>");
-                        $pos += strlen("</script>"); // @todo why append this value?
-                        $row .= substr($tmp, 0, $pos);
-                        break;
-                    } else {
-                        $row .= $tmp;
-                    }
-                }
-            }
-            $outputXML = $row;
-        }
+
         
         return $outputXML;
     }
@@ -205,16 +206,10 @@ class PDOTransport implements TransportInterface
     public function executeQuery($conn, $stmt)
     {
         $txt = array();
-        $crsr = odbc_exec($conn, $stmt);
+        $crsr = $conn->exec($conn, $stmt);
         
         if (is_resource($crsr)) {      
-            while (odbc_fetch_row($crsr)) {  
-                $row = odbc_result($crsr, 1);
-                
-                if (!$row) {
-                    break;
-                }
-                
+            while ($row = $stmt->fetch($crsr)) {
                 $txt[]=  $row;
             }
         } else {

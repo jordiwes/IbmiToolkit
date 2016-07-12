@@ -4,7 +4,7 @@ namespace ToolkitApi;
 use ToolkitApi\TransportInterface;
 
 /**
- * Class odbcsupp
+ * Class ODBCTransport
  *
  * @package ToolkitApi
  */
